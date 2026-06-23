@@ -98,7 +98,7 @@ class BluetoothTab extends StatelessWidget {
         ),
       );
     } catch (e) {
-      log("خطأ في بناء علامة تبويب البلوتوث: $e");
+      log("Error building bluetooth tab: $e");
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
