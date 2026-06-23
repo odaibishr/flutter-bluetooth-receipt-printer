@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'printer/printer.dart';
+import 'package:printer_demo/printer/printer.dart';
+import 'package:printer_demo/printer/lib/data.dart';
 
 void main() {
   runApp(const MyApp());
@@ -115,7 +116,7 @@ class _MyHomePageState extends State<MyHomePage> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const Printer()),
+                  MaterialPageRoute(builder: (context) => Printer(receiptData: dummyReceipt)),
                 );
               },
               icon: const Icon(Icons.print, size: 24),
