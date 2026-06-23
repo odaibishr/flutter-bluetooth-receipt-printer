@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'total_row.dart';
 
 class TotalSummary extends StatelessWidget {
   const TotalSummary({
     super.key,
     required this.orderTotal,
-    this.delivery = 600.0,
+    required this.delivery,
+    this.currency = 'ر.ي',
   });
 
   final double orderTotal;
   final double delivery;
+  final String currency;
 
   @override
   Widget build(BuildContext context) {
@@ -16,47 +19,25 @@ class TotalSummary extends StatelessWidget {
 
     return Column(
       children: [
-        _buildTotalRow('إجمالي الطلب', '${orderTotal.toStringAsFixed(1)} ر.ي'),
-        const SizedBox(height: 4),
-        _buildTotalRow(
-          'الإجمالي على المحل',
-          '${orderTotal.toStringAsFixed(1)} ر.ي',
+        TotalRow(
+          label: 'إجمالي الطلب',
+          value: '${orderTotal.toStringAsFixed(1)} $currency',
         ),
         const SizedBox(height: 4),
-        _buildTotalRow('التوصيل', '${delivery.toStringAsFixed(1)} ر.ي'),
+        TotalRow(
+          label: 'الإجمالي على المحل',
+          value: '${orderTotal.toStringAsFixed(1)} $currency',
+        ),
+        const SizedBox(height: 4),
+        TotalRow(
+          label: 'التوصيل',
+          value: '${delivery.toStringAsFixed(1)} $currency',
+        ),
         const SizedBox(height: 8),
-        _buildTotalRow(
-          'الإجمالي الكلي',
-          '${grandTotal.toStringAsFixed(1)} ر.ي',
+        TotalRow(
+          label: 'الإجمالي الكلي',
+          value: '${grandTotal.toStringAsFixed(1)} $currency',
           isGrandTotal: true,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTotalRow(
-    String label,
-    String value, {
-    bool isGrandTotal = false,
-  }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: isGrandTotal ? 17 : 15,
-            fontWeight: isGrandTotal ? FontWeight.bold : FontWeight.w600,
-            color: Colors.black87,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: isGrandTotal ? 17 : 15,
-            fontWeight: isGrandTotal ? FontWeight.bold : FontWeight.w500,
-            color: Colors.black87,
-          ),
         ),
       ],
     );
