@@ -24,7 +24,7 @@ class ReceiptHeader extends StatelessWidget {
             children: [
               Text(
                 'رقم الطلب $orderNumber',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
                   color: Colors.black87,
@@ -33,7 +33,7 @@ class ReceiptHeader extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 storeName,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF4A2A1B),
@@ -73,7 +73,7 @@ class ReceiptHeader extends StatelessWidget {
           child: Center(
             child: logo != null && logo!.contains('http')
                 ? Image.network(logo!, width: 40, height: 40)
-                : Text(
+                : const Text(
                     'U',
                     style: TextStyle(
                       fontSize: 36,
