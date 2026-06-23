@@ -4,6 +4,8 @@ import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:printer_demo/printer/components/devices_list.dart';
 import 'package:printer_demo/printer/components/bluetooth_status.dart';
 import 'package:printer_demo/printer/components/scan_button.dart';
+import 'package:printer_demo/printer/components/disconnect_button.dart';
+import 'package:printer_demo/printer/components/cancel_operation_button.dart';
 
 class BluetoothTab extends StatelessWidget {
   final BluetoothState bluetoothState;
@@ -67,7 +69,6 @@ class BluetoothTab extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            // قائمة الأجهزة
             DevicesList(
               devices: devices,
               bluetoothState: bluetoothState,
@@ -79,12 +80,20 @@ class BluetoothTab extends StatelessWidget {
               onDevicePressed: onDevicePressed,
             ),
 
-            // زر قطع الاتصال - يظهر فقط عند وجود اتصال
-            if (isConnected) _buildDisconnectButton(),
+            // This button is used to disconnect from the printer only when connected to the printer
+            if (isConnected)
+              DisconnectButton(
+                isDisconnecting: isDisconnecting,
+                isPrinting: isPrinting,
+                isConnecting: isConnecting,
+                onDisconnectPressed: onDisconnectPressed,
+              ),
 
-            // زر إلغاء العمليات العالقة - يظهر فقط عند وجود عمليات جارية
+            // This button is used to cancel any pending operation
             if (isDisconnecting || isPrinting || isConnecting)
-              _buildCancelOperationButton(),
+              CancelOperationButton(
+                onCancelOperationPressed: onCancelOperationPressed,
+              ),
           ],
         ),
       );
@@ -115,45 +124,5 @@ class BluetoothTab extends StatelessWidget {
         ),
       );
     }
-  }
-
-  // بناء زر إلغاء العمليات العالقة
-  Widget _buildCancelOperationButton() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16.0),
-      child: ElevatedButton.icon(
-        onPressed: onCancelOperationPressed,
-        icon: const Icon(Icons.cancel),
-        label: const Text('إلغاء العملية الحالية'),
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-      ),
-    );
-  }
-
-
-
-
-  // بناء زر قطع الاتصال
-  Widget _buildDisconnectButton() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16.0),
-      child: ElevatedButton.icon(
-        onPressed: isDisconnecting || isPrinting || isConnecting
-            ? null
-            : onDisconnectPressed,
-        icon: isDisconnecting
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : const Icon(Icons.bluetooth_disabled),
-        label: Text(isDisconnecting ? 'جاري قطع الاتصال...' : 'قطع الاتصال'),
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-      ),
-    );
   }
 }
