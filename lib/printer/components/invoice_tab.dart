@@ -27,8 +27,10 @@ class InvoiceTab extends StatelessWidget {
     required this.onRetry,
   });
 
-  double get _total =>
-      receiptData.items.fold(0, (sum, item) => sum + (item.price * item.quantity));
+  double get _total => receiptData.items.fold(
+    0,
+    (sum, item) => sum + (item.price * item.quantity),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -42,14 +44,14 @@ class InvoiceTab extends StatelessWidget {
               controller: screenshotController,
               child: Container(
                 color: Colors.white,
-                width: receiptWidth, 
+                width: receiptWidth,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // The pink container for the details of the order
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFDF1F0), 
+                        color: const Color(0xFFFDF1F0),
                         borderRadius: BorderRadius.circular(16.0),
                       ),
                       padding: const EdgeInsets.all(16.0),
@@ -61,6 +63,7 @@ class InvoiceTab extends StatelessWidget {
                             orderNumber: receiptData.orderNumber,
                             storeName: receiptData.storeName,
                             storeAddress: receiptData.storeAddress,
+                            logo: receiptData.logo,
                           ),
                           const SizedBox(height: 8),
                           const Divider(
@@ -70,7 +73,12 @@ class InvoiceTab extends StatelessWidget {
                           const SizedBox(height: 8),
 
                           // The list of items in receipt
-                          ...receiptData.items.map((item) => ReceiptItemRow(item: item)),
+                          ...receiptData.items.map(
+                            (item) => ReceiptItemRow(
+                              item: item,
+                              currency: receiptData.currency,
+                            ),
+                          ),
 
                           const SizedBox(height: 8),
                           const Divider(
@@ -82,6 +90,7 @@ class InvoiceTab extends StatelessWidget {
                           TotalSummary(
                             orderTotal: _total,
                             delivery: receiptData.deliveryFee,
+                            currency: receiptData.currency,
                           ),
                         ],
                       ),
@@ -122,7 +131,7 @@ class InvoiceTab extends StatelessWidget {
         ),
       );
     } catch (e) {
-      log("خطأ في بناء علامة تبويب الفاتورة: $e");
+      log("Error building invoice tab: $e");
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
