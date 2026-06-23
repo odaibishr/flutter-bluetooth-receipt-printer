@@ -1,26 +1,33 @@
-import 'dart:async'; // Add async library for handling timeouts
+import 'dart:async';
 import 'dart:developer';
 import 'dart:typed_data';
 
-import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart' show PaperSize;
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:image/image.dart' as img;
-import 'package:permission_handler/permission_handler.dart';
-import 'package:printer_demo/printer/components/invoice_tab.dart';
-import 'package:printer_demo/printer/components/bluetooth_tab.dart';
-import 'package:printer_demo/printer/models/receipt_data.dart';
 import 'package:screenshot/screenshot.dart';
+
+import 'components/invoice_tab.dart';
+import 'components/bluetooth_tab.dart';
+import 'models/receipt_data.dart';
+import 'models/printer_exceptions.dart';
+import 'services/printer_service.dart';
+import 'services/bluetooth_printer_serial_impl.dart';
+import 'services/receipt_encoder.dart';
 
 class Printer extends StatefulWidget {
   final ReceiptData receiptData;
   final PaperSize paperSize;
+  final PrinterService? printerService;
+  final ReceiptEncoder? receiptEncoder;
 
   const Printer({
     super.key,
     required this.receiptData,
     this.paperSize = PaperSize.mm80,
+    this.printerService,
+    this.receiptEncoder,
   });
 
   @override
@@ -31,31 +38,24 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
   // Controller for screenshot
   final ScreenshotController _screenshotController = ScreenshotController();
 
-  // Bluetooth connection state
+  // Decoupled services
+  late final PrinterService _printerService;
+  late final ReceiptEncoder _receiptEncoder;
+
+  // Subscriptions
+  StreamSubscription<BluetoothState>? _btStateSubscription;
+  StreamSubscription<bool>? _connectionSubscription;
+
+  // UI State
   BluetoothState _bluetoothState = BluetoothState.UNKNOWN;
-  BluetoothConnection? _connection;
-  CapabilityProfile? _capabilityProfile;
-  StreamSubscription<BluetoothState>? _bluetoothStateSubscription;
-
-  Future<CapabilityProfile> _getCapabilityProfile() async {
-    _capabilityProfile ??= await CapabilityProfile.load();
-    return _capabilityProfile!;
-  }
-
   List<BluetoothDevice> _devices = [];
   BluetoothDevice? _selectedDevice;
+  BluetoothDevice? _connectingDevice;
 
   bool _isConnecting = false;
   bool _isDisconnecting = false;
   bool _isScanning = false;
   bool _isPrinting = false;
-
-  BluetoothDevice? _connectingDevice;
-
-  Timer? _disconnectionTimer;
-  Timer? _printingTimer;
-  Timer? _connectionTimer;
-  Timer? _scanningTimer;
 
   late TabController _tabController;
 
@@ -65,70 +65,65 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
     try {
       _tabController = TabController(length: 2, vsync: this);
 
+      // Initialize services (default to serial impl if not provided)
+      _printerService = widget.printerService ?? BluetoothPrinterSerialImpl();
+      _receiptEncoder = widget.receiptEncoder ?? ReceiptEncoder();
+
       _initBluetooth();
     } catch (e) {
-      log("خطأ في تهيئة الصفحة: $e");
+      log("Error initializing page: $e");
       _showErrorToast("خطأ في تهيئة الصفحة: $e");
     }
   }
 
   Future<void> _initBluetooth() async {
     try {
-      Map<Permission, PermissionStatus> statuses = await [
-        Permission.bluetooth,
-        Permission.bluetoothConnect,
-        Permission.bluetoothScan,
-        Permission.location,
-      ].request();
-
-      bool allGranted = true;
-      statuses.forEach((permission, status) {
-        if (!status.isGranted) {
-          allGranted = false;
-          log("لم يتم منح إذن: $permission");
-        }
-      });
-
-      if (!allGranted) {
+      // Check and request permissions through the service
+      final hasPermissions = await _printerService.checkAndRequestPermissions();
+      if (!hasPermissions) {
         _showErrorToast("يرجى منح جميع الأذونات المطلوبة لاستخدام البلوتوث");
         return;
       }
 
-      FlutterBluetoothSerial.instance.state
-          .then((state) {
-            if (mounted) {
-              setState(() {
-                _bluetoothState = state;
-              });
+      // Read initial state
+      _bluetoothState = await _printerService.currentState;
+      if (mounted) setState(() {});
+
+      // Listen to Bluetooth hardware state changes
+      _btStateSubscription = _printerService.stateStream.listen(
+        (state) {
+          if (mounted) {
+            setState(() {
+              _bluetoothState = state;
+            });
+
+            if (state == BluetoothState.STATE_OFF) {
+              _showInfoToast("تم إيقاف تشغيل البلوتوث");
+            } else if (state == BluetoothState.STATE_ON) {
+              _showInfoToast("تم تشغيل البلوتوث");
             }
-          })
-          .catchError((e) {
-            log("خطأ في الحصول على حالة البلوتوث: $e");
-            _showErrorToast("خطأ في الحصول على حالة البلوتوث");
-          });
+          }
+        },
+        onError: (e) {
+          log("Error listening to Bluetooth changes: $e");
+        },
+      );
 
-      _bluetoothStateSubscription = FlutterBluetoothSerial.instance
-          .onStateChanged()
-          .listen(
-            (state) {
-              if (mounted) {
-                setState(() {
-                  _bluetoothState = state;
-                });
-
-                if (state == BluetoothState.STATE_OFF) {
-                  _showInfoToast("تم إيقاف تشغيل البلوتوث");
-                } else if (state == BluetoothState.STATE_ON) {
-                  _showInfoToast("تم تشغيل البلوتوث");
-                }
-              }
-            },
-            onError: (e) {
-              log("خطأ في الاستماع لتغييرات البلوتوث: $e");
-            },
-          );
+      // Listen to connection status changes
+      _connectionSubscription = _printerService.isConnectedStream.listen(
+        (isConnected) {
+          if (mounted) {
+            setState(() {
+              _selectedDevice = isConnected ? _printerService.connectedDevice : null;
+            });
+          }
+        },
+        onError: (e) {
+          log("Error listening to connection state: $e");
+        },
+      );
     } catch (e) {
-      log("خطأ في تهيئة البلوتوث: $e");
+      log("Error initializing Bluetooth: $e");
       _showErrorToast("خطأ في تهيئة البلوتوث: $e");
     }
   }
@@ -138,7 +133,6 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
       msg: message,
       toastLength: Toast.LENGTH_LONG,
       gravity: ToastGravity.BOTTOM,
-      timeInSecForIosWeb: 1,
       backgroundColor: Colors.red,
       textColor: Colors.white,
       fontSize: 16.0,
@@ -150,7 +144,6 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
       msg: message,
       toastLength: Toast.LENGTH_LONG,
       gravity: ToastGravity.BOTTOM,
-      timeInSecForIosWeb: 1,
       backgroundColor: Colors.green,
       textColor: Colors.white,
       fontSize: 16.0,
@@ -162,58 +155,23 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
       msg: message,
       toastLength: Toast.LENGTH_LONG,
       gravity: ToastGravity.BOTTOM,
-      timeInSecForIosWeb: 1,
       backgroundColor: Colors.blue,
       textColor: Colors.white,
       fontSize: 16.0,
     );
   }
 
-  void _cancelAllTimers() {
-    try {
-      _disconnectionTimer?.cancel();
-      _printingTimer?.cancel();
-      _connectionTimer?.cancel();
-      _scanningTimer?.cancel();
-    } catch (e) {
-      log("خطأ في إلغاء المؤقتات: $e");
-    }
-  }
-
   void _cancelOperation() {
-    _cancelAllTimers();
-
-    if (_isDisconnecting) {
-      setState(() {
-        _connection = null;
-        _selectedDevice = null;
-        _isDisconnecting = false;
-      });
-      _showInfoToast('تم إلغاء عملية قطع الاتصال');
-    }
-
-    if (_isPrinting) {
-      setState(() {
-        _isPrinting = false;
-      });
-      _showInfoToast('تم إلغاء عملية الطباعة');
-    }
-
-    if (_isConnecting) {
-      setState(() {
-        _isConnecting = false;
-        _connectingDevice = null;
-      });
-      _showInfoToast('تم إلغاء عملية الاتصال');
-    }
+    setState(() {
+      _isConnecting = false;
+      _isDisconnecting = false;
+      _isPrinting = false;
+      _connectingDevice = null;
+    });
+    _showInfoToast("تم إلغاء العملية");
   }
 
   Future<void> _scanDevices() async {
-    if (_bluetoothState != BluetoothState.STATE_ON) {
-      _showErrorToast("يرجى تفعيل البلوتوث أولاً");
-      return;
-    }
-
     if (_isScanning) return;
 
     setState(() {
@@ -221,45 +179,20 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
       _devices = [];
     });
 
-    _scanningTimer?.cancel();
-
     try {
-      _scanningTimer = Timer(const Duration(seconds: 15), () {
-        log('Scanning timeout - forcing completion');
-        if (mounted) {
-          setState(() {
-            _isScanning = false;
-          });
-          _showInfoToast('تم إلغاء عملية البحث بسبب انتهاء المهلة');
-        }
-      });
-
-      // _showLoadingToast('Searching for devices...');
-
-      _devices = await FlutterBluetoothSerial.instance
-          .getBondedDevices()
-          .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              throw TimeoutException('انتهت مهلة البحث عن الأجهزة');
-            },
-          );
-
-      _scanningTimer?.cancel();
+      _devices = await _printerService.getBondedDevices();
 
       if (_devices.isEmpty) {
-        _showInfoToast(
-          'لم يتم العثور على أجهزة مقترنة. يرجى اقتران الطابعة من إعدادات البلوتوث أولاً.',
-        );
+        _showInfoToast("لم يتم العثور على أجهزة مقترنة. يرجى اقتران الطابعة من إعدادات البلوتوث أولاً.");
       } else {
-        _showSuccessToast('تم العثور على ${_devices.length} جهاز');
+        _showSuccessToast("تم العثور على أجهزة مقترنة: ${_devices.length}");
       }
+    } on PrinterException catch (e) {
+      _showErrorToast(e.message);
     } catch (e) {
       log("Error scanning devices: $e");
-      _showErrorToast('فشل البحث عن الأجهزة: $e');
+      _showErrorToast('لم يتم العثور على أجهزة مقترنة: $e');
     } finally {
-      _scanningTimer?.cancel();
-
       if (mounted) {
         setState(() {
           _isScanning = false;
@@ -269,376 +202,142 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
   }
 
   Future<void> _connectToDevice(BluetoothDevice device) async {
-    if (_bluetoothState != BluetoothState.STATE_ON) {
-      _showErrorToast("يرجى تفعيل البلوتوث أولاً");
-      return;
-    }
-
     if (_isConnecting) return;
-
-    if (_connection != null) {
-      try {
-        await _disconnectFromDevice();
-      } catch (e) {
-        log("خطأ في قطع الاتصال السابق: $e");
-      }
-    }
 
     setState(() {
       _isConnecting = true;
-      _selectedDevice = device;
       _connectingDevice = device;
+      _selectedDevice = device;
     });
 
-    _connectionTimer?.cancel();
-
     try {
-      _connectionTimer = Timer(const Duration(seconds: 15), () {
-        log('Connection timeout - forcing completion');
-        if (mounted) {
-          setState(() {
-            _isConnecting = false;
-            _connectingDevice = null;
-            if (_connection == null) {
-              _selectedDevice = null;
-            }
-          });
-          _showInfoToast('تم إلغاء عملية الاتصال بسبب انتهاء المهلة');
-        }
-      });
-
-      // _showLoadingToast('Connecting to device ${device.name}...');
-
-      _connection = await BluetoothConnection.toAddress(device.address).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw TimeoutException(
-            'انتهت مهلة الاتصال. تأكد من أن الجهاز قريب ومشغل.',
-          );
-        },
-      );
-
-      _connectionTimer?.cancel();
-
-      log('Connected to the device');
-
+      await _printerService.connect(device);
+      _showSuccessToast("تم الاتصال بنجاح: ${device.name}");
+    } on PrinterException catch (e) {
+      _showErrorToast(e.message);
       if (mounted) {
         setState(() {
-          _isConnecting = false;
-          _connectingDevice = null;
+          _selectedDevice = null;
         });
       }
-
-      _showSuccessToast('تم الاتصال بجهاز ${device.name}');
-
-      _connection?.input?.listen(
-        (Uint8List data) {
-          log('Data incoming: ${String.fromCharCodes(data)}');
-        },
-        onError: (error) {
-          log('Connection input error: $error');
-          if (mounted) {
-            setState(() {
-              _connection = null;
-              _selectedDevice = null;
-            });
-            _showErrorToast('انقطع الاتصال بسبب خطأ: $error');
-          }
-        },
-        onDone: () {
-          log('Connection closed by remote');
-          if (mounted) {
-            setState(() {
-              _connection = null;
-              _selectedDevice = null;
-            });
-            _showInfoToast('تم قطع الاتصال من قبل الجهاز');
-          }
-        },
-        cancelOnError: true,
-      );
     } catch (e) {
-      log('Cannot connect, exception occurred: $e');
-
-      _connectionTimer?.cancel();
-
+      log('Cannot connect: $e');
+      _showErrorToast('فشل الاتصال: $e');
+      if (mounted) {
+        setState(() {
+          _selectedDevice = null;
+        });
+      }
+    } finally {
       if (mounted) {
         setState(() {
           _isConnecting = false;
           _connectingDevice = null;
-          if (_connection == null) {
-            _selectedDevice = null;
-          }
         });
       }
-
-      // Show error message
-      _showErrorToast('فشل الاتصال: $e');
     }
   }
 
-  // Disconnect from the current device
   Future<void> _disconnectFromDevice() async {
-    // Check if a connection exists
-    if (_connection == null) {
-      _showInfoToast('لا يوجد اتصال حالي');
-      return;
-    }
-
-    // Prevent multiple disconnection attempts
     if (_isDisconnecting) return;
 
-    // Save the device name before disconnect to use in messages
-    final deviceName = _selectedDevice?.name ?? 'الجهاز';
+    final deviceName = _selectedDevice?.name ?? 'الطابعة';
 
-    // Update disconnection status
-    if (mounted) {
-      setState(() {
-        _isDisconnecting = true;
-      });
-    }
-
-    // Cancel any previous timer
-    _disconnectionTimer?.cancel();
+    setState(() {
+      _isDisconnecting = true;
+    });
 
     try {
-      // Create a timer to force disconnection if it takes too long
-      _disconnectionTimer = Timer(const Duration(seconds: 5), () {
-        log('Disconnection timeout - forcing disconnect');
-
-        // Forcefully reset connection state
-        if (mounted) {
-          setState(() {
-            _connection = null;
-            _selectedDevice = null;
-            _isDisconnecting = false;
-          });
-        }
-
-        // Show message
-        _showInfoToast('تم قطع الاتصال بـ $deviceName (بعد انتهاء المهلة)');
-      });
-
-      // Show disconnection message
-      // _showLoadingToast('Disconnecting from $deviceName...');
-
-      // Try to disconnect normally with a timeout
-      await _connection?.close().timeout(
-        const Duration(seconds: 3),
-        onTimeout: () {
-          throw TimeoutException('انتهت مهلة قطع الاتصال');
-        },
-      );
-
-      // Cancel the timer since the operation succeeded
-      _disconnectionTimer?.cancel();
-
-      // Update status after disconnection
-      if (mounted) {
-        setState(() {
-          _connection = null;
-          _selectedDevice = null;
-          _isDisconnecting = false;
-        });
-      }
-
-      // Show success disconnection toast
-      _showInfoToast('تم قطع الاتصال بـ $deviceName');
+      await _printerService.disconnect();
+      _showInfoToast("تم قطع الاتصال بـ $deviceName");
+    } on PrinterException catch (e) {
+      _showErrorToast(e.message);
     } catch (e) {
       log('Error disconnecting: $e');
-
-      // Cancel the timer since the operation ended (success or failure)
-      _disconnectionTimer?.cancel();
-
-      // Forcefully reset connection state on error
+      _showErrorToast('خطأ أثناء قطع الاتصال: $e');
+    } finally {
       if (mounted) {
         setState(() {
-          _connection = null;
-          _selectedDevice = null;
           _isDisconnecting = false;
         });
       }
-
-      // Show error message
-      _showErrorToast('تم قطع الاتصال بـ $deviceName (مع حدوث خطأ: $e)');
     }
   }
 
-  // Capture receipt screenshot and print it
   Future<void> _captureAndPrint() async {
-    // Check Bluetooth power state
-    if (_bluetoothState != BluetoothState.STATE_ON) {
-      _showErrorToast("يرجى تفعيل البلوتوث أولاً");
-      return;
-    }
-
-    // Prevent multiple printing attempts
     if (_isPrinting) return;
 
-    // Check if connected to a printer
-    if (_connection == null || _selectedDevice == null) {
-      _showErrorToast('يرجى الاتصال بطابعة أولاً');
-      return;
-    }
-
-    // Update printing state
     setState(() {
       _isPrinting = true;
     });
 
-    // Cancel any previous timer
-    _printingTimer?.cancel();
-
     try {
-      // Create a timer to force print completion if it takes too long
-      _printingTimer = Timer(const Duration(seconds: 30), () {
-        log('Printing timeout - forcing completion');
-
-        // Reset printing state
-        if (mounted) {
-          setState(() {
-            _isPrinting = false;
-          });
-        }
-
-        // Show info message
-        _showInfoToast(
-          'تم إلغاء عملية الطباعة بسبب انتهاء المهلة. يرجى المحاولة مرة أخرى.',
-        );
-      });
-
-      // Show receipt preparation message
-      // _showLoadingToast('Preparing invoice for printing...');
-
       // Define print width based on paper size
       final PaperSize paperSize = widget.paperSize;
       final int printWidth = paperSize == PaperSize.mm80 ? 576 : 384;
 
       // Calculate pixelRatio to match printer width
-      // The container width in code is InvoiceTab.receiptWidth logical points
       final double targetPixelRatio = printWidth / InvoiceTab.receiptWidth;
 
-      // Capture invoice image with timeout and printing quality
+      // Capture receipt widget screenshot
       final Uint8List? imageBytes = await _screenshotController
           .capture(pixelRatio: targetPixelRatio)
           .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () {
-              throw TimeoutException('انتهت مهلة التقاط صورة الفاتورة');
-            },
-          );
+        const Duration(seconds: 5),
+        onTimeout: () {
+          throw TimeoutException("انتهت مهلة التقاط صورة الفاتورة");
+        },
+      );
 
       if (imageBytes == null) {
-        throw Exception('فشل التقاط صورة الفاتورة');
+        throw const PrintFailedException("فشل التقاط صورة الفاتورة");
       }
 
-      // Show data transmission message
-      // _showLoadingToast('Sending invoice to printer...');
-
-      // Convert image to suitable format
-      final img.Image? image = img.decodeImage(imageBytes);
-      if (image == null) {
-        throw Exception('فشل تحويل الصورة');
-      }
-
-      // Since image is captured at target resolution, no resize is needed
-      final img.Image resizedImage = image.width == printWidth
-          ? image
-          : img.copyResize(image, width: printWidth);
-
-      // Generate ESC/POS commands for the printer
-      final profile = await _getCapabilityProfile();
-      final generator = Generator(
-        paperSize,
-        profile,
+      // Convert image bytes to ESC/POS bytes
+      final List<int> escPosBytes = await _receiptEncoder.encodeImageToEscPos(
+        imageBytes,
+        paperSize: paperSize,
       );
-      final List<int> bytes = [];
 
-      // Add image
-      bytes.addAll(generator.image(resizedImage));
-
-      // Cut paper
-      bytes.addAll(generator.cut());
-
-      // Check connection status before sending data
-      if (_connection == null || !mounted) {
-        throw Exception('تم فقدان الاتصال بالطابعة');
-      }
-
-      // Send data to printer with timeout
-      _connection!.output.add(Uint8List.fromList(bytes));
-
-      // Wait for data to be completely sent
-      bool dataSent = false;
-      try {
-        await _connection!.output.allSent.timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {
-            throw TimeoutException('انتهت مهلة إرسال البيانات إلى الطابعة');
-          },
-        );
-        dataSent = true;
-      } catch (e) {
-        log('Error waiting for data to be sent: $e');
-        throw Exception('فشل إرسال البيانات إلى الطابعة: $e');
-      }
-
-      // Cancel the timer because the operation has finished (success or failure)
-      _printingTimer?.cancel();
-
-      // Update the print state
-      if (mounted) {
-        setState(() {
-          _isPrinting = false;
-        });
-      }
-
-      // Show success message
-      if (dataSent) {
-        _showSuccessToast('تمت الطباعة بنجاح');
-      }
+      // Send to printer
+      await _printerService.sendBytes(escPosBytes);
+      _showSuccessToast("تمت الطباعة بنجاح");
+    } on PrinterException catch (e) {
+      _showErrorToast(e.message);
     } catch (e) {
       log('Error printing: $e');
-
-      // Cancel the timer because the operation has finished (success or failure)
-      _printingTimer?.cancel();
-
-      // Update the print state
+      _showErrorToast('فشل الطباعة: $e');
+    } finally {
       if (mounted) {
         setState(() {
           _isPrinting = false;
         });
       }
-
-      // Show error message
-      _showErrorToast('فشل الطباعة: $e');
     }
   }
-
 
   @override
   void dispose() {
     try {
-      // Cancel all timers
-      _cancelAllTimers();
-
-      // Cancel Bluetooth subscriptions to prevent memory leak
-      _bluetoothStateSubscription?.cancel();
-
-      // Disconnect from the device without updating the UI
-      if (_connection != null) {
-        _connection?.close();
-        _connection = null;
+      _btStateSubscription?.cancel();
+      _connectionSubscription?.cancel();
+      
+      // If we initialized the default instance, dispose it.
+      if (widget.printerService == null) {
+        _printerService.dispose();
       }
+
       _tabController.dispose();
     } catch (e) {
-      log("خطأ في dispose: $e");
+      log("Error in dispose: $e");
     }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool isConnected = _printerService.isConnected;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('نظام الفواتير والطباعة'),
@@ -653,17 +352,14 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
       body: TabBarView(
         controller: _tabController,
         children: [
-          // The invoice tab
           InvoiceTab(
             receiptData: widget.receiptData,
             screenshotController: _screenshotController,
             isPrinting: _isPrinting,
-            isConnected: _connection != null,
+            isConnected: isConnected,
             onPrintPressed: _captureAndPrint,
             onRetry: () => setState(() {}),
           ),
-
-          // The bluetooth tab
           BluetoothTab(
             bluetoothState: _bluetoothState,
             selectedDevice: _selectedDevice,
@@ -673,7 +369,7 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
             isDisconnecting: _isDisconnecting,
             isPrinting: _isPrinting,
             connectingDevice: _connectingDevice,
-            isConnected: _connection != null,
+            isConnected: isConnected,
             onScanPressed: _scanDevices,
             onDevicePressed: _connectToDevice,
             onDisconnectPressed: _disconnectFromDevice,
