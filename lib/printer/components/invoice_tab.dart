@@ -8,6 +8,8 @@ import 'package:printer_demo/printer/models/receipt_data.dart';
 import 'package:screenshot/screenshot.dart';
 
 class InvoiceTab extends StatelessWidget {
+  static const double receiptWidth = 384.0;
+
   final ReceiptData receiptData;
   final ScreenshotController screenshotController;
   final bool isPrinting;
@@ -40,7 +42,7 @@ class InvoiceTab extends StatelessWidget {
               controller: screenshotController,
               child: Container(
                 color: Colors.white,
-                width: 384, 
+                width: receiptWidth, 
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
