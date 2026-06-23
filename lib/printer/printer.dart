@@ -8,10 +8,8 @@ import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:image/image.dart' as img;
 import 'package:permission_handler/permission_handler.dart';
-import 'package:printer_demo/printer/components/receipt_header.dart';
-import 'package:printer_demo/printer/components/receipt_item_row.dart';
-import 'package:printer_demo/printer/components/total_summary.dart';
-import 'package:printer_demo/printer/components/receipt_metadata.dart';
+import 'package:printer_demo/printer/components/invoice_tab.dart';
+import 'package:printer_demo/printer/components/bluetooth_tab.dart';
 import 'package:printer_demo/printer/models/receipt_data.dart';
 import 'package:screenshot/screenshot.dart';
 
@@ -173,6 +171,34 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
       _scanningTimer?.cancel();
     } catch (e) {
       log("خطأ في إلغاء المؤقتات: $e");
+    }
+  }
+
+  void _cancelOperation() {
+    _cancelAllTimers();
+
+    if (_isDisconnecting) {
+      setState(() {
+        _connection = null;
+        _selectedDevice = null;
+        _isDisconnecting = false;
+      });
+      _showInfoToast('تم إلغاء عملية قطع الاتصال');
+    }
+
+    if (_isPrinting) {
+      setState(() {
+        _isPrinting = false;
+      });
+      _showInfoToast('تم إلغاء عملية الطباعة');
+    }
+
+    if (_isConnecting) {
+      setState(() {
+        _isConnecting = false;
+        _connectingDevice = null;
+      });
+      _showInfoToast('تم إلغاء عملية الاتصال');
     }
   }
 
@@ -583,9 +609,6 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
     }
   }
 
-  // The total of the items
-  double get _total =>
-      widget.receiptData.items.fold(0, (sum, item) => sum + (item.price * item.quantity));
 
   @override
   void dispose() {
@@ -625,420 +648,33 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
         controller: _tabController,
         children: [
           // The invoice tab
-          _buildInvoiceTab(),
+          InvoiceTab(
+            receiptData: widget.receiptData,
+            screenshotController: _screenshotController,
+            isPrinting: _isPrinting,
+            isConnected: _connection != null,
+            onPrintPressed: _captureAndPrint,
+            onRetry: () => setState(() {}),
+          ),
 
           // The bluetooth tab
-          _buildBluetoothTab(),
+          BluetoothTab(
+            bluetoothState: _bluetoothState,
+            selectedDevice: _selectedDevice,
+            devices: _devices,
+            isScanning: _isScanning,
+            isConnecting: _isConnecting,
+            isDisconnecting: _isDisconnecting,
+            isPrinting: _isPrinting,
+            connectingDevice: _connectingDevice,
+            isConnected: _connection != null,
+            onScanPressed: _scanDevices,
+            onDevicePressed: _connectToDevice,
+            onDisconnectPressed: _disconnectFromDevice,
+            onCancelOperationPressed: _cancelOperation,
+            onRetry: () => setState(() {}),
+          ),
         ],
-      ),
-    );
-  }
-
-  // Build the invoice tab
-  Widget _buildInvoiceTab() {
-    try {
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // The receipt with screenshot controller
-            Screenshot(
-              controller: _screenshotController,
-              child: Container(
-                color: Colors.white,
-                width: 384, // ضمان نفس عرض الطباعة الحرارية
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // The pink container for the details of the order
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFDF1F0), // لون وردي فاتح وجميل
-                        borderRadius: BorderRadius.circular(16.0),
-                      ),
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // The receipt header
-                          ReceiptHeader(
-                            orderNumber: widget.receiptData.orderNumber,
-                            storeName: widget.receiptData.storeName,
-                            storeAddress: widget.receiptData.storeAddress,
-                          ),
-                          const SizedBox(height: 8),
-                          const Divider(
-                            color: Color(0xFFE05F52),
-                            thickness: 1.5,
-                          ),
-                          const SizedBox(height: 8),
-
-                          // The list of items in receipt
-                          ...widget.receiptData.items.map((item) => ReceiptItemRow(item: item)),
-
-                          const SizedBox(height: 8),
-                          const Divider(
-                            color: Color(0xFFE05F52),
-                            thickness: 1.5,
-                          ),
-                          const SizedBox(height: 8),
-
-                          // ملخص الحساب والإجماليات
-                          TotalSummary(
-                            orderTotal: _total,
-                            delivery: widget.receiptData.deliveryFee,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // The section of the additional data (white background below the pink box)
-                    ReceiptMetadata(receiptData: widget.receiptData),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // The printer button and in printing will be loading
-            ElevatedButton.icon(
-              onPressed: (_connection != null && !_isPrinting)
-                  ? _captureAndPrint
-                  : null,
-              icon: _isPrinting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.print),
-              label: Text(_isPrinting ? 'جاري الطباعة...' : 'طباعة الفاتورة'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      log("خطأ في بناء علامة تبويب الفاتورة: $e");
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
-            const SizedBox(height: 16),
-            const Text(
-              'حدث خطأ في عرض الفاتورة',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              e.toString(),
-              style: const TextStyle(fontSize: 14),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {});
-              },
-              child: const Text('إعادة المحاولة'),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-
-  // بناء علامة تبويب البلوتوث
-  Widget _buildBluetoothTab() {
-    try {
-      return Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // حالة البلوتوث
-            _buildBluetoothStatus(),
-
-            const SizedBox(height: 16),
-
-            // زر البحث عن الأجهزة
-            _buildScanButton(),
-
-            const SizedBox(height: 16),
-
-            // قائمة الأجهزة
-            _buildDevicesList(),
-
-            // زر قطع الاتصال - يظهر فقط عند وجود اتصال
-            if (_connection != null) _buildDisconnectButton(),
-
-            // زر إلغاء العمليات العالقة - يظهر فقط عند وجود عمليات جارية
-            if (_isDisconnecting || _isPrinting || _isConnecting)
-              _buildCancelOperationButton(),
-          ],
-        ),
-      );
-    } catch (e) {
-      log("خطأ في بناء علامة تبويب البلوتوث: $e");
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
-            const SizedBox(height: 16),
-            const Text(
-              'حدث خطأ في عرض صفحة البلوتوث',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              e.toString(),
-              style: const TextStyle(fontSize: 14),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                // إعادة بناء الواجهة
-                setState(() {});
-              },
-              child: const Text('إعادة المحاولة'),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  // بناء زر إلغاء العمليات العالقة
-  Widget _buildCancelOperationButton() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16.0),
-      child: ElevatedButton.icon(
-        onPressed: () {
-          // إلغاء العملية الجارية بالقوة
-          _cancelAllTimers();
-
-          if (_isDisconnecting) {
-            setState(() {
-              _connection = null;
-              _selectedDevice = null;
-              _isDisconnecting = false;
-            });
-            _showInfoToast('تم إلغاء عملية قطع الاتصال');
-          }
-
-          if (_isPrinting) {
-            setState(() {
-              _isPrinting = false;
-            });
-            _showInfoToast('تم إلغاء عملية الطباعة');
-          }
-
-          if (_isConnecting) {
-            setState(() {
-              _isConnecting = false;
-              _connectingDevice = null;
-            });
-            _showInfoToast('تم إلغاء عملية الاتصال');
-          }
-        },
-        icon: const Icon(Icons.cancel),
-        label: const Text('إلغاء العملية الحالية'),
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-      ),
-    );
-  }
-
-  // بناء حالة البلوتوث
-  Widget _buildBluetoothStatus() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  _bluetoothState == BluetoothState.STATE_ON
-                      ? Icons.bluetooth_connected
-                      : Icons.bluetooth_disabled,
-                  color: _bluetoothState == BluetoothState.STATE_ON
-                      ? Colors.blue
-                      : Colors.grey,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'حالة البلوتوث: ${_bluetoothState == BluetoothState.STATE_ON ? 'مفعل' : 'غير مفعل'}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-            if (_selectedDevice != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'متصل بـ: ${_selectedDevice!.name}',
-                      style: const TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // بناء زر البحث عن الأجهزة
-  Widget _buildScanButton() {
-    return ElevatedButton.icon(
-      onPressed:
-          _bluetoothState == BluetoothState.STATE_ON &&
-              !_isScanning &&
-              !_isConnecting &&
-              !_isDisconnecting &&
-              !_isPrinting
-          ? _scanDevices
-          : null,
-      icon: _isScanning
-          ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-          : const Icon(Icons.search),
-      label: Text(_isScanning ? 'جاري البحث...' : 'بحث عن الأجهزة'),
-    );
-  }
-
-  // بناء قائمة الأجهزة
-  Widget _buildDevicesList() {
-    return Expanded(
-      child: _devices.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.bluetooth_searching,
-                    size: 48,
-                    color: Colors.grey,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'لا توجد أجهزة متاحة\nاضغط على زر البحث للعثور على الأجهزة',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                  if (_bluetoothState != BluetoothState.STATE_ON)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 16.0),
-                      child: Text(
-                        'يرجى تفعيل البلوتوث أولاً',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
-                ],
-              ),
-            )
-          : ListView.builder(
-              itemCount: _devices.length,
-              itemBuilder: (context, index) {
-                final device = _devices[index];
-                final bool isSelected =
-                    _selectedDevice?.address == device.address;
-                final bool isConnecting =
-                    _isConnecting &&
-                    _connectingDevice?.address == device.address;
-
-                return Card(
-                  color: isSelected ? Colors.blue.shade50 : null,
-                  elevation: isSelected ? 3 : 1,
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  child: ListTile(
-                    leading: isConnecting
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(
-                            Icons.print,
-                            color: isSelected ? Colors.blue : Colors.grey,
-                          ),
-                    title: Text(
-                      device.name ?? 'جهاز غير معروف',
-                      style: TextStyle(
-                        fontWeight: isSelected
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                    ),
-                    subtitle: Text(device.address),
-                    trailing: isSelected
-                        ? const Icon(Icons.check_circle, color: Colors.green)
-                        : null,
-                    onTap: (isConnecting || _isDisconnecting || _isPrinting)
-                        ? null
-                        : () => _connectToDevice(device),
-                  ),
-                );
-              },
-            ),
-    );
-  }
-
-  // بناء زر قطع الاتصال
-  Widget _buildDisconnectButton() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16.0),
-      child: ElevatedButton.icon(
-        onPressed: _isDisconnecting || _isPrinting || _isConnecting
-            ? null
-            : _disconnectFromDevice,
-        icon: _isDisconnecting
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : const Icon(Icons.bluetooth_disabled),
-        label: Text(_isDisconnecting ? 'جاري قطع الاتصال...' : 'قطع الاتصال'),
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
       ),
     );
   }
