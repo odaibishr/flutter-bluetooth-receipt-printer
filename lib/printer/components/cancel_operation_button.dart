@@ -10,13 +10,11 @@ class CancelOperationButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16.0),
-      child: ElevatedButton.icon(
-        onPressed: onCancelOperationPressed,
-        icon: const Icon(Icons.cancel),
-        label: const Text('إلغاء العملية الحالية'),
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+    return TextButton(
+      onPressed: onCancelOperationPressed,
+      child: const Text(
+        'إلغاء العملية',
+        style: TextStyle(color: Colors.red),
       ),
     );
   }
