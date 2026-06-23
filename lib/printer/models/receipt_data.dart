@@ -13,6 +13,8 @@ class ReceiptData {
   final String notes;
   final String customerName;
   final String carNumber;
+  final String currency;
+  final String? logo;
 
   ReceiptData({
     required this.orderNumber,
@@ -20,12 +22,14 @@ class ReceiptData {
     required this.storeAddress,
     required this.invoiceDate,
     required this.items,
-    this.deliveryFee = 600.0,
+    required this.deliveryFee,
     required this.customerAddress,
     required this.branchAddress,
     required this.paymentMethod,
     required this.notes,
     required this.customerName,
     required this.carNumber,
+    this.currency = 'ر.ي',
+    this.logo,
   });
 }

@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:printer_demo/printer/models/invoice_item.dart';
 
 class ReceiptItemRow extends StatelessWidget {
-  const ReceiptItemRow({super.key, required this.item});
+  const ReceiptItemRow({
+    super.key,
+    required this.item,
+    this.currency = 'ر.ي',
+  });
   final InvoiceItem item;
+  final String currency;
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +20,7 @@ class ReceiptItemRow extends StatelessWidget {
           Row(
             children: [
               Text(
-                '${item.price.toStringAsFixed(1)}  ر.ي',
+                '${item.price.toStringAsFixed(1)} $currency',
                 style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
