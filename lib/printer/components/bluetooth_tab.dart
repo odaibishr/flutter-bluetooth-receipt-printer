@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:printer_demo/printer/components/devices_list.dart';
 import 'package:printer_demo/printer/components/bluetooth_status.dart';
+import 'package:printer_demo/printer/components/scan_button.dart';
 
 class BluetoothTab extends StatelessWidget {
   final BluetoothState bluetoothState;
@@ -47,7 +48,6 @@ class BluetoothTab extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // حالة البلوتوث
             BluetoothStatus(
               bluetoothState: bluetoothState,
               selectedDevice: selectedDevice,
@@ -56,7 +56,14 @@ class BluetoothTab extends StatelessWidget {
             const SizedBox(height: 16),
 
             // زر البحث عن الأجهزة
-            _buildScanButton(),
+            ScanButton(
+              bluetoothState: bluetoothState,
+              isScanning: isScanning,
+              isConnecting: isConnecting,
+              isDisconnecting: isDisconnecting,
+              isPrinting: isPrinting,
+              onScanPressed: onScanPressed,
+            ),
 
             const SizedBox(height: 16),
 
@@ -124,29 +131,6 @@ class BluetoothTab extends StatelessWidget {
   }
 
 
-  // بناء زر البحث عن الأجهزة
-  Widget _buildScanButton() {
-    return ElevatedButton.icon(
-      onPressed: bluetoothState == BluetoothState.STATE_ON &&
-              !isScanning &&
-              !isConnecting &&
-              !isDisconnecting &&
-              !isPrinting
-          ? onScanPressed
-          : null,
-      icon: isScanning
-          ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-          : const Icon(Icons.search),
-      label: Text(isScanning ? 'جاري البحث...' : 'بحث عن الأجهزة'),
-    );
-  }
 
 
   // بناء زر قطع الاتصال
