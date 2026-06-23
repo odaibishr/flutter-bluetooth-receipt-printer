@@ -38,7 +38,7 @@ class DevicesList extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'لا توجد أجهزة متاحة\nاضغط على زر البحث للعثور على الأجهزة',
+                    'لا توجد أجهزة مقترنة\nاضغط على زر البحث للعثور على الأجهزة',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey),
                   ),
