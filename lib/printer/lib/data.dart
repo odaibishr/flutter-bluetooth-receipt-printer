@@ -1,4 +1,5 @@
 import '../models/invoice_item.dart';
+import '../models/receipt_data.dart';
 
 final List<InvoiceItem> items = [
   InvoiceItem(
@@ -53,3 +54,18 @@ final List<InvoiceItem> items = [
     option: "مفرد",
   ),
 ];
+
+final ReceiptData dummyReceipt = ReceiptData(
+  orderNumber: "93160",
+  storeName: "مطعم يوتيرن - U-turn - فرع حدة",
+  storeAddress: "شارع حدة بالقرب من شركة صافر للنفط",
+  invoiceDate: DateTime.now(),
+  items: items,
+  deliveryFee: 600.0,
+  customerAddress: "شارع إيران مكتب تكنوكيز",
+  branchAddress: "شارع إيران عمارة بنك اليمن والكويت الدور الخامس",
+  paymentMethod: "الدفع عند الاستلام",
+  notes: "لا يوجد ملاحظات",
+  customerName: "عبدالرحمن طلبات تجريبية-تست",
+  carNumber: "1",
+);
