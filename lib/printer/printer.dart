@@ -7,15 +7,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:image/image.dart' as img;
-import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:printer_demo/printer/components/receipt_header.dart';
 import 'package:printer_demo/printer/components/receipt_item_row.dart';
-import 'package:printer_demo/printer/lib/data.dart';
+import 'package:printer_demo/printer/components/total_summary.dart';
+import 'package:printer_demo/printer/components/receipt_metadata.dart';
+import 'package:printer_demo/printer/models/receipt_data.dart';
 import 'package:screenshot/screenshot.dart';
 
 class Printer extends StatefulWidget {
-  const Printer({super.key});
+  final ReceiptData receiptData;
+  const Printer({super.key, required this.receiptData});
 
   @override
   State<Printer> createState() => _PrinterState();
@@ -28,6 +30,14 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
   // Bluetooth connection state
   BluetoothState _bluetoothState = BluetoothState.UNKNOWN;
   BluetoothConnection? _connection;
+  CapabilityProfile? _capabilityProfile;
+  StreamSubscription<BluetoothState>? _bluetoothStateSubscription;
+
+  Future<CapabilityProfile> _getCapabilityProfile() async {
+    _capabilityProfile ??= await CapabilityProfile.load();
+    return _capabilityProfile!;
+  }
+
   List<BluetoothDevice> _devices = [];
   BluetoothDevice? _selectedDevice;
 
@@ -42,11 +52,6 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
   Timer? _printingTimer;
   Timer? _connectionTimer;
   Timer? _scanningTimer;
-
-  final String _orderNumber = "93160";
-  final String _storeName = "مطعم يوتيرن - U-turn - فرع حدة";
-  final String _storeAddress = "شارع حدة بالقرب من شركة صافر للنفط";
-  final DateTime _invoiceDate = DateTime.now();
 
   late TabController _tabController;
 
@@ -98,24 +103,26 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
             _showErrorToast("خطأ في الحصول على حالة البلوتوث");
           });
 
-      FlutterBluetoothSerial.instance
+      _bluetoothStateSubscription = FlutterBluetoothSerial.instance
           .onStateChanged()
-          .listen((state) {
-            if (mounted) {
-              setState(() {
-                _bluetoothState = state;
-              });
+          .listen(
+            (state) {
+              if (mounted) {
+                setState(() {
+                  _bluetoothState = state;
+                });
 
-              if (state == BluetoothState.STATE_OFF) {
-                _showInfoToast("تم إيقاف تشغيل البلوتوث");
-              } else if (state == BluetoothState.STATE_ON) {
-                _showInfoToast("تم تشغيل البلوتوث");
+                if (state == BluetoothState.STATE_OFF) {
+                  _showInfoToast("تم إيقاف تشغيل البلوتوث");
+                } else if (state == BluetoothState.STATE_ON) {
+                  _showInfoToast("تم تشغيل البلوتوث");
+                }
               }
-            }
-          })
-          .onError((e) {
-            log("خطأ في الاستماع لتغييرات البلوتوث: $e");
-          });
+            },
+            onError: (e) {
+              log("خطأ في الاستماع لتغييرات البلوتوث: $e");
+            },
+          );
     } catch (e) {
       log("خطأ في تهيئة البلوتوث: $e");
       _showErrorToast("خطأ في تهيئة البلوتوث: $e");
@@ -157,18 +164,6 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
       fontSize: 16.0,
     );
   }
-
-  // void _showLoadingToast(String message) {
-  //   Fluttertoast.showToast(
-  //     msg: message,
-  //     toastLength: Toast.LENGTH_LONG,
-  //     gravity: ToastGravity.CENTER,
-  //     timeInSecForIosWeb: 1,
-  //     backgroundColor: Colors.black54,
-  //     textColor: Colors.white,
-  //     fontSize: 16.0,
-  //   );
-  // }
 
   void _cancelAllTimers() {
     try {
@@ -365,9 +360,11 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
     final deviceName = _selectedDevice?.name ?? 'الجهاز';
 
     // تحديث حالة قطع الاتصال
-    setState(() {
-      _isDisconnecting = true;
-    });
+    if (mounted) {
+      setState(() {
+        _isDisconnecting = true;
+      });
+    }
 
     // إلغاء أي مؤقت سابق
     _disconnectionTimer?.cancel();
@@ -481,9 +478,17 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
       // إظهار رسالة تجهيز الفاتورة
       // _showLoadingToast('جاري تجهيز الفاتورة للطباعة...');
 
-      // التقاط صورة الفاتورة مع مهلة زمنية
+      // تحديد عرض الطباعة بناءً على حجم الورق
+      const PaperSize paperSize = PaperSize.mm80;
+      final int printWidth = paperSize == PaperSize.mm80 ? 576 : 384;
+
+      // حساب معامل تكبير الصورة (pixelRatio) ليكون حجم الصورة الملتقطة مطابقاً لعرض الطابعة تماماً
+      // عرض الحاوية في الكود هو 384.0 نقطة منطقية
+      final double targetPixelRatio = printWidth / 384.0;
+
+      // التقاط صورة الفاتورة مع مهلة زمنية ودقة ملائمة للطباعة
       final Uint8List? imageBytes = await _screenshotController
-          .capture()
+          .capture(pixelRatio: targetPixelRatio)
           .timeout(
             const Duration(seconds: 5),
             onTimeout: () {
@@ -504,13 +509,16 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
         throw Exception('فشل تحويل الصورة');
       }
 
-      // تغيير حجم الصورة لتناسب عرض الطابعة الحرارية (عادة 384 بكسل)
-      final img.Image resizedImage = img.copyResize(image, width: 384);
+      // وبما أننا التقطنا الصورة بالدقة المطلوبة مباشرة، فلا داعي لعملية تغيير الحجم المكلفة
+      final img.Image resizedImage = image.width == printWidth
+          ? image
+          : img.copyResize(image, width: printWidth);
 
       // إنشاء أوامر ESC/POS للطابعة
+      final profile = await _getCapabilityProfile();
       final generator = Generator(
-        PaperSize.mm80,
-        await CapabilityProfile.load(),
+        paperSize,
+        profile,
       );
       final List<int> bytes = [];
 
@@ -577,7 +585,7 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
 
   // The total of the items
   double get _total =>
-      items.fold(0, (sum, item) => sum + (item.price * item.quantity));
+      widget.receiptData.items.fold(0, (sum, item) => sum + (item.price * item.quantity));
 
   @override
   void dispose() {
@@ -585,9 +593,13 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
       // إلغاء جميع المؤقتات
       _cancelAllTimers();
 
-      // The disconnection from the device
+      // إلغاء اشتراكات البلوتوث لمنع تسرب الذاكرة
+      _bluetoothStateSubscription?.cancel();
+
+      // قطع الاتصال بالجهاز مباشرة دون تحديث واجهة المستخدم
       if (_connection != null) {
-        _disconnectFromDevice();
+        _connection?.close();
+        _connection = null;
       }
       _tabController.dispose();
     } catch (e) {
@@ -650,9 +662,9 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
                         children: [
                           // The receipt header
                           ReceiptHeader(
-                            orderNumber: _orderNumber,
-                            storeName: _storeName,
-                            storeAddress: _storeAddress,
+                            orderNumber: widget.receiptData.orderNumber,
+                            storeName: widget.receiptData.storeName,
+                            storeAddress: widget.receiptData.storeAddress,
                           ),
                           const SizedBox(height: 8),
                           const Divider(
@@ -662,7 +674,7 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
                           const SizedBox(height: 8),
 
                           // The list of items in receipt
-                          ...items.map((item) => ReceiptItemRow(item: item)),
+                          ...widget.receiptData.items.map((item) => ReceiptItemRow(item: item)),
 
                           const SizedBox(height: 8),
                           const Divider(
@@ -672,14 +684,17 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
                           const SizedBox(height: 8),
 
                           // ملخص الحساب والإجماليات
-                          _buildTotalsSummary(),
+                          TotalSummary(
+                            orderTotal: _total,
+                            delivery: widget.receiptData.deliveryFee,
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 16),
 
                     // The section of the additional data (white background below the pink box)
-                    _buildMetadataSection(),
+                    ReceiptMetadata(receiptData: widget.receiptData),
                   ],
                 ),
               ),
@@ -744,119 +759,6 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
     }
   }
 
-  // بناء الإجماليات وملخص الحساب
-  Widget _buildTotalsSummary() {
-    double orderTotal = _total;
-    double delivery = 600.0;
-    double grandTotal = orderTotal + delivery;
-
-    return Column(
-      children: [
-        _buildTotalRow('إجمالي الطلب', '${orderTotal.toStringAsFixed(1)} ر.ي'),
-        const SizedBox(height: 4),
-        _buildTotalRow(
-          'الإجمالي على المحل',
-          '${orderTotal.toStringAsFixed(1)} ر.ي',
-        ),
-        const SizedBox(height: 4),
-        _buildTotalRow('التوصيل', '${delivery.toStringAsFixed(1)} ر.ي'),
-        const SizedBox(height: 8),
-        _buildTotalRow(
-          'الإجمالي الكلي',
-          '${grandTotal.toStringAsFixed(1)} ر.ي',
-          isGrandTotal: true,
-        ),
-      ],
-    );
-  }
-
-  // بناء سطر مفرد في ملخص الحساب
-  Widget _buildTotalRow(
-    String label,
-    String value, {
-    bool isGrandTotal = false,
-  }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: isGrandTotal ? 17 : 15,
-            fontWeight: isGrandTotal ? FontWeight.bold : FontWeight.w600,
-            color: Colors.black87,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: isGrandTotal ? 17 : 15,
-            fontWeight: isGrandTotal ? FontWeight.bold : FontWeight.w500,
-            color: Colors.black87,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // بناء قسم البيانات الإضافية
-  Widget _buildMetadataSection() {
-    String formattedDate = DateFormat('dd/MM/yyyy').format(_invoiceDate);
-    String formattedTime = DateFormat('hh:mm').format(_invoiceDate);
-    String amPm = _invoiceDate.hour >= 12 ? 'م' : 'ص';
-    String fullDateTime = "$formattedDate $formattedTime $amPm";
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: Column(
-        children: [
-          _buildMetadataRow('شارع إيران مكتب تكنوكيز', Icons.place_outlined),
-          _buildMetadataRow(
-            'شارع إيران عمارة بنك اليمن والكويت الدور الخامس',
-            Icons.map_outlined,
-          ),
-          _buildMetadataRow('الدفع عند الاستلام', Icons.payment_outlined),
-          _buildMetadataRow(
-            'لا يوجد ملاحظات',
-            Icons.note_alt_outlined,
-            isNotes: true,
-          ),
-          _buildMetadataRow(
-            'عبدالرحمن طلبات تجريبية-تست',
-            Icons.person_outline,
-          ),
-          _buildMetadataRow('1', Icons.directions_car_filled_outlined),
-          _buildMetadataRow(fullDateTime, Icons.watch_later_outlined),
-        ],
-      ),
-    );
-  }
-
-  // بناء سطر مفرد في البيانات الإضافية
-  Widget _buildMetadataRow(String text, IconData icon, {bool isNotes = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: isNotes ? FontWeight.bold : FontWeight.w500,
-                color: isNotes ? const Color(0xFFC0392B) : Colors.black87,
-              ),
-              textAlign: TextAlign.end,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Icon(icon, size: 20, color: Colors.grey.shade600),
-        ],
-      ),
-    );
-  }
 
   // بناء علامة تبويب البلوتوث
   Widget _buildBluetoothTab() {
