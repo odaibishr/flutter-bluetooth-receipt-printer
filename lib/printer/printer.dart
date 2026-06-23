@@ -1,4 +1,4 @@
-import 'dart:async'; // إضافة مكتبة async للتعامل مع المهلات الزمنية
+import 'dart:async'; // Add async library for handling timeouts
 import 'dart:developer';
 import 'dart:typed_data';
 
@@ -15,7 +15,13 @@ import 'package:screenshot/screenshot.dart';
 
 class Printer extends StatefulWidget {
   final ReceiptData receiptData;
-  const Printer({super.key, required this.receiptData});
+  final PaperSize paperSize;
+
+  const Printer({
+    super.key,
+    required this.receiptData,
+    this.paperSize = PaperSize.mm80,
+  });
 
   @override
   State<Printer> createState() => _PrinterState();
@@ -228,7 +234,7 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
         }
       });
 
-      // _showLoadingToast('جاري البحث عن الأجهزة...');
+      // _showLoadingToast('Searching for devices...');
 
       _devices = await FlutterBluetoothSerial.instance
           .getBondedDevices()
@@ -301,7 +307,7 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
         }
       });
 
-      // _showLoadingToast('جاري الاتصال بجهاز ${device.name}...');
+      // _showLoadingToast('Connecting to device ${device.name}...');
 
       _connection = await BluetoothConnection.toAddress(device.address).timeout(
         const Duration(seconds: 10),
@@ -366,41 +372,41 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
         });
       }
 
-      // إظهار رسالة خطأ
+      // Show error message
       _showErrorToast('فشل الاتصال: $e');
     }
   }
 
-  // قطع الاتصال بالجهاز الحالي
+  // Disconnect from the current device
   Future<void> _disconnectFromDevice() async {
-    // التحقق من وجود اتصال
+    // Check if a connection exists
     if (_connection == null) {
       _showInfoToast('لا يوجد اتصال حالي');
       return;
     }
 
-    // منع محاولات قطع الاتصال المتعددة
+    // Prevent multiple disconnection attempts
     if (_isDisconnecting) return;
 
-    // حفظ اسم الجهاز قبل قطع الاتصال لاستخدامه في الرسائل
+    // Save the device name before disconnect to use in messages
     final deviceName = _selectedDevice?.name ?? 'الجهاز';
 
-    // تحديث حالة قطع الاتصال
+    // Update disconnection status
     if (mounted) {
       setState(() {
         _isDisconnecting = true;
       });
     }
 
-    // إلغاء أي مؤقت سابق
+    // Cancel any previous timer
     _disconnectionTimer?.cancel();
 
     try {
-      // إنشاء مؤقت لإنهاء عملية قطع الاتصال إذا استغرقت وقتاً طويلاً
+      // Create a timer to force disconnection if it takes too long
       _disconnectionTimer = Timer(const Duration(seconds: 5), () {
         log('Disconnection timeout - forcing disconnect');
 
-        // إعادة تعيين حالة الاتصال بالقوة
+        // Forcefully reset connection state
         if (mounted) {
           setState(() {
             _connection = null;
@@ -409,14 +415,14 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
           });
         }
 
-        // إظهار رسالة
+        // Show message
         _showInfoToast('تم قطع الاتصال بـ $deviceName (بعد انتهاء المهلة)');
       });
 
-      // إظهار رسالة قطع الاتصال
-      // _showLoadingToast('جاري قطع الاتصال بـ $deviceName...');
+      // Show disconnection message
+      // _showLoadingToast('Disconnecting from $deviceName...');
 
-      // محاولة قطع الاتصال بشكل طبيعي مع مهلة زمنية
+      // Try to disconnect normally with a timeout
       await _connection?.close().timeout(
         const Duration(seconds: 3),
         onTimeout: () {
@@ -424,10 +430,10 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
         },
       );
 
-      // إلغاء المؤقت لأن العملية نجحت
+      // Cancel the timer since the operation succeeded
       _disconnectionTimer?.cancel();
 
-      // تحديث الحالة بعد قطع الاتصال
+      // Update status after disconnection
       if (mounted) {
         setState(() {
           _connection = null;
@@ -436,15 +442,15 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
         });
       }
 
-      // إظهار رسالة نجاح قطع الاتصال
+      // Show success disconnection toast
       _showInfoToast('تم قطع الاتصال بـ $deviceName');
     } catch (e) {
       log('Error disconnecting: $e');
 
-      // إلغاء المؤقت لأن العملية انتهت (بنجاح أو فشل)
+      // Cancel the timer since the operation ended (success or failure)
       _disconnectionTimer?.cancel();
 
-      // إعادة تعيين حالة الاتصال بالقوة في حالة الخطأ
+      // Forcefully reset connection state on error
       if (mounted) {
         setState(() {
           _connection = null;
@@ -453,66 +459,66 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
         });
       }
 
-      // إظهار رسالة خطأ
+      // Show error message
       _showErrorToast('تم قطع الاتصال بـ $deviceName (مع حدوث خطأ: $e)');
     }
   }
 
-  // التقاط صورة الفاتورة وطباعتها
+  // Capture receipt screenshot and print it
   Future<void> _captureAndPrint() async {
-    // التحقق من حالة البلوتوث
+    // Check Bluetooth power state
     if (_bluetoothState != BluetoothState.STATE_ON) {
       _showErrorToast("يرجى تفعيل البلوتوث أولاً");
       return;
     }
 
-    // منع محاولات الطباعة المتعددة
+    // Prevent multiple printing attempts
     if (_isPrinting) return;
 
-    // التحقق من وجود اتصال بالطابعة
+    // Check if connected to a printer
     if (_connection == null || _selectedDevice == null) {
       _showErrorToast('يرجى الاتصال بطابعة أولاً');
       return;
     }
 
-    // تحديث حالة الطباعة
+    // Update printing state
     setState(() {
       _isPrinting = true;
     });
 
-    // إلغاء أي مؤقت سابق
+    // Cancel any previous timer
     _printingTimer?.cancel();
 
     try {
-      // إنشاء مؤقت لإنهاء عملية الطباعة إذا استغرقت وقتاً طويلاً
+      // Create a timer to force print completion if it takes too long
       _printingTimer = Timer(const Duration(seconds: 30), () {
         log('Printing timeout - forcing completion');
 
-        // إعادة تعيين حالة الطباعة
+        // Reset printing state
         if (mounted) {
           setState(() {
             _isPrinting = false;
           });
         }
 
-        // إظهار رسالة
+        // Show info message
         _showInfoToast(
           'تم إلغاء عملية الطباعة بسبب انتهاء المهلة. يرجى المحاولة مرة أخرى.',
         );
       });
 
-      // إظهار رسالة تجهيز الفاتورة
-      // _showLoadingToast('جاري تجهيز الفاتورة للطباعة...');
+      // Show receipt preparation message
+      // _showLoadingToast('Preparing invoice for printing...');
 
-      // تحديد عرض الطباعة بناءً على حجم الورق
-      const PaperSize paperSize = PaperSize.mm80;
+      // Define print width based on paper size
+      final PaperSize paperSize = widget.paperSize;
       final int printWidth = paperSize == PaperSize.mm80 ? 576 : 384;
 
-      // حساب معامل تكبير الصورة (pixelRatio) ليكون حجم الصورة الملتقطة مطابقاً لعرض الطابعة تماماً
-      // عرض الحاوية في الكود هو 384.0 نقطة منطقية
-      final double targetPixelRatio = printWidth / 384.0;
+      // Calculate pixelRatio to match printer width
+      // The container width in code is InvoiceTab.receiptWidth logical points
+      final double targetPixelRatio = printWidth / InvoiceTab.receiptWidth;
 
-      // التقاط صورة الفاتورة مع مهلة زمنية ودقة ملائمة للطباعة
+      // Capture invoice image with timeout and printing quality
       final Uint8List? imageBytes = await _screenshotController
           .capture(pixelRatio: targetPixelRatio)
           .timeout(
@@ -526,21 +532,21 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
         throw Exception('فشل التقاط صورة الفاتورة');
       }
 
-      // إظهار رسالة إرسال البيانات
-      // _showLoadingToast('جاري إرسال الفاتورة إلى الطابعة...');
+      // Show data transmission message
+      // _showLoadingToast('Sending invoice to printer...');
 
-      // تحويل الصورة إلى تنسيق مناسب
+      // Convert image to suitable format
       final img.Image? image = img.decodeImage(imageBytes);
       if (image == null) {
         throw Exception('فشل تحويل الصورة');
       }
 
-      // وبما أننا التقطنا الصورة بالدقة المطلوبة مباشرة، فلا داعي لعملية تغيير الحجم المكلفة
+      // Since image is captured at target resolution, no resize is needed
       final img.Image resizedImage = image.width == printWidth
           ? image
           : img.copyResize(image, width: printWidth);
 
-      // إنشاء أوامر ESC/POS للطابعة
+      // Generate ESC/POS commands for the printer
       final profile = await _getCapabilityProfile();
       final generator = Generator(
         paperSize,
@@ -548,21 +554,21 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
       );
       final List<int> bytes = [];
 
-      // إضافة الصورة
+      // Add image
       bytes.addAll(generator.image(resizedImage));
 
-      // قص الورقة
+      // Cut paper
       bytes.addAll(generator.cut());
 
-      // التحقق من حالة الاتصال قبل إرسال البيانات
+      // Check connection status before sending data
       if (_connection == null || !mounted) {
         throw Exception('تم فقدان الاتصال بالطابعة');
       }
 
-      // إرسال البيانات إلى الطابعة مع مهلة زمنية
+      // Send data to printer with timeout
       _connection!.output.add(Uint8List.fromList(bytes));
 
-      // استخدام مهلة زمنية لانتظار إرسال البيانات
+      // Wait for data to be completely sent
       bool dataSent = false;
       try {
         await _connection!.output.allSent.timeout(
@@ -587,7 +593,7 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
         });
       }
 
-      // إظهار رسالة نجاح
+      // Show success message
       if (dataSent) {
         _showSuccessToast('تمت الطباعة بنجاح');
       }
@@ -604,7 +610,7 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
         });
       }
 
-      // إظهار رسالة خطأ
+      // Show error message
       _showErrorToast('فشل الطباعة: $e');
     }
   }
@@ -613,13 +619,13 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
   @override
   void dispose() {
     try {
-      // إلغاء جميع المؤقتات
+      // Cancel all timers
       _cancelAllTimers();
 
-      // إلغاء اشتراكات البلوتوث لمنع تسرب الذاكرة
+      // Cancel Bluetooth subscriptions to prevent memory leak
       _bluetoothStateSubscription?.cancel();
 
-      // قطع الاتصال بالجهاز مباشرة دون تحديث واجهة المستخدم
+      // Disconnect from the device without updating the UI
       if (_connection != null) {
         _connection?.close();
         _connection = null;
