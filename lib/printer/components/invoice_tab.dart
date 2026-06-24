@@ -1,9 +1,9 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:printer_demo/printer/components/receipt_header.dart';
 import 'package:printer_demo/printer/components/receipt_item_row.dart';
 import 'package:printer_demo/printer/components/total_summary.dart';
-import 'package:printer_demo/printer/components/receipt_metadata.dart';
 import 'package:printer_demo/printer/models/receipt_data.dart';
 import 'package:screenshot/screenshot.dart';
 
@@ -92,13 +92,36 @@ class InvoiceTab extends StatelessWidget {
                             delivery: receiptData.deliveryFee,
                             currency: receiptData.currency,
                           ),
+
+                          const SizedBox(height: 8),
+                          const Divider(
+                            color: Color(0xFFE05F52),
+                            thickness: 1.5,
+                          ),
+                          const SizedBox(height: 8),
+
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            textDirection: TextDirection.rtl,
+                            children: [
+                              Container(),
+                              Text(
+                                DateFormat(
+                                  'yyyy-MM-dd hh:mm a',
+                                ).format(receiptData.invoiceDate),
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.end,
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 16),
-
-                    // The section of the additional data (white background below the pink box)
-                    ReceiptMetadata(receiptData: receiptData),
                   ],
                 ),
               ),
