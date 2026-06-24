@@ -34,7 +34,7 @@ class ReceiptHeader extends StatelessWidget {
               Text(
                 storeName,
                 style: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF4A2A1B),
                 ),
