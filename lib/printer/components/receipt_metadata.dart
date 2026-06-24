@@ -54,15 +54,15 @@ class ReceiptMetadata extends StatelessWidget {
             child: Text(
               text,
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: isNotes ? FontWeight.bold : FontWeight.w500,
-                color: isNotes ? const Color(0xFFC0392B) : Colors.black87,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: isNotes ? const Color(0xFFC0392B) : Colors.black,
               ),
               textAlign: TextAlign.end,
             ),
           ),
           const SizedBox(width: 12),
-          Icon(icon, size: 20, color: Colors.grey.shade600),
+          Icon(icon, size: 22, color: Colors.black),
         ],
       ),
     );

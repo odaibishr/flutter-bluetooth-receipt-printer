@@ -15,6 +15,23 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Demo',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        textTheme: const TextTheme(
+          displayLarge: TextStyle(fontWeight: FontWeight.bold),
+          displayMedium: TextStyle(fontWeight: FontWeight.bold),
+          displaySmall: TextStyle(fontWeight: FontWeight.bold),
+          headlineLarge: TextStyle(fontWeight: FontWeight.bold),
+          headlineMedium: TextStyle(fontWeight: FontWeight.bold),
+          headlineSmall: TextStyle(fontWeight: FontWeight.bold),
+          titleLarge: TextStyle(fontWeight: FontWeight.bold),
+          titleMedium: TextStyle(fontWeight: FontWeight.bold),
+          titleSmall: TextStyle(fontWeight: FontWeight.bold),
+          bodyLarge: TextStyle(fontWeight: FontWeight.bold),
+          bodyMedium: TextStyle(fontWeight: FontWeight.bold),
+          bodySmall: TextStyle(fontWeight: FontWeight.bold),
+          labelLarge: TextStyle(fontWeight: FontWeight.bold),
+          labelMedium: TextStyle(fontWeight: FontWeight.bold),
+          labelSmall: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );

@@ -80,10 +80,8 @@ class DevicesList extends StatelessWidget {
                           ),
                     title: Text(
                       device.name ?? 'جهاز غير معروف',
-                      style: TextStyle(
-                        fontWeight: isSelected
-                            ? FontWeight.bold
-                            : FontWeight.normal,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                     subtitle: Text(device.address),
