@@ -7,12 +7,6 @@ class ReceiptData {
   final DateTime invoiceDate;
   final List<InvoiceItem> items;
   final double deliveryFee;
-  final String customerAddress;
-  final String branchAddress;
-  final String paymentMethod;
-  final String notes;
-  final String customerName;
-  final String carNumber;
   final String currency;
   final String? logo;
 
@@ -23,12 +17,6 @@ class ReceiptData {
     required this.invoiceDate,
     required this.items,
     required this.deliveryFee,
-    required this.customerAddress,
-    required this.branchAddress,
-    required this.paymentMethod,
-    required this.notes,
-    required this.customerName,
-    required this.carNumber,
     this.currency = 'ر.ي',
     this.logo,
   });

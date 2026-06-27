@@ -22,9 +22,9 @@ class ReceiptItemRow extends StatelessWidget {
               Text(
                 '${item.price.toStringAsFixed(1)} $currency',
                 style: const TextStyle(
-                  fontSize: 15,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: Colors.black,
                 ),
               ),
               const Spacer(),
@@ -32,9 +32,9 @@ class ReceiptItemRow extends StatelessWidget {
                 child: Text(
                   item.name,
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 19,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    color: Colors.black,
                   ),
                   textAlign: TextAlign.end,
                 ),
@@ -49,9 +49,9 @@ class ReceiptItemRow extends StatelessWidget {
                 child: Text(
                   '${item.quantity}',
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 17,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    color: Colors.black,
                   ),
                 ),
               ),
@@ -63,10 +63,10 @@ class ReceiptItemRow extends StatelessWidget {
               padding: const EdgeInsets.only(right: 28.0, top: 2.0),
               child: Text(
                 '{ ${item.option} }',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade800,
-                  fontWeight: FontWeight.w500,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
@@ -79,12 +79,15 @@ class ReceiptItemRow extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Text(
-                      addition,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade800,
-                        fontWeight: FontWeight.w500,
+                    Expanded(
+                      child: Text(
+                        addition,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.end,
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -104,9 +107,9 @@ class ReceiptItemRow extends StatelessWidget {
               child: Text(
                 'يحتوي على:',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: Colors.black,
                 ),
               ),
             ),
@@ -120,12 +123,15 @@ class ReceiptItemRow extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Text(
-                      subItem.name,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black87,
+                    Expanded(
+                      child: Text(
+                        subItem.name,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                        textAlign: TextAlign.end,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -144,7 +150,7 @@ class ReceiptItemRow extends StatelessWidget {
                       child: Text(
                         '- ${subItem.quantity}',
                         style: const TextStyle(
-                          fontSize: 11,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFFC0392B), // لون أحمر داكن
                         ),
@@ -159,10 +165,10 @@ class ReceiptItemRow extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 28.0, top: 4.0),
                 child: Text(
                   '{ ${item.option} }',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade800,
-                    fontWeight: FontWeight.w500,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),

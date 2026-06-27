@@ -112,7 +112,7 @@ class BluetoothTab extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               e.toString(),
-              style: const TextStyle(fontSize: 14),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
