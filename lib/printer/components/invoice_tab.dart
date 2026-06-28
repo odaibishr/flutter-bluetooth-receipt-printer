@@ -16,6 +16,7 @@ class InvoiceTab extends StatelessWidget {
   final bool isConnected;
   final VoidCallback onPrintPressed;
   final VoidCallback onRetry;
+  final bool hasPrintedOnce;
 
   const InvoiceTab({
     super.key,
@@ -25,6 +26,7 @@ class InvoiceTab extends StatelessWidget {
     required this.isConnected,
     required this.onPrintPressed,
     required this.onRetry,
+    required this.hasPrintedOnce,
   });
 
   double get _total => receiptData.items.fold(
@@ -64,6 +66,7 @@ class InvoiceTab extends StatelessWidget {
                             storeName: receiptData.storeName,
                             storeAddress: receiptData.storeAddress,
                             logo: receiptData.logo,
+                            hasPrintedOnce: hasPrintedOnce,
                           ),
                           const SizedBox(height: 8),
                           const Divider(
