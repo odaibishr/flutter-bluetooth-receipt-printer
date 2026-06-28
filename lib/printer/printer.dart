@@ -56,6 +56,7 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
   bool _isDisconnecting = false;
   bool _isScanning = false;
   bool _isPrinting = false;
+  bool _hasPrintedOnce = false;
 
   late TabController _tabController;
 
@@ -267,6 +268,37 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
   Future<void> _captureAndPrint() async {
     if (_isPrinting) return;
 
+    if (_hasPrintedOnce) {
+      final bool? confirm = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text('تأكيد الطباعة', textAlign: TextAlign.right),
+            content: const Text(
+              'لقد قمت بطباعة هذه الفاتورة مسبقاً. هل تريد طباعتها مرة أخرى؟',
+              textAlign: TextAlign.right,
+            ),
+            actionsAlignment: MainAxisAlignment.start,
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('إلغاء'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                child: const Text('نعم، طباعة', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirm != true) {
+        return;
+      }
+    }
+
     setState(() {
       _isPrinting = true;
     });
@@ -301,12 +333,40 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
 
       // Send to printer
       await _printerService.sendBytes(escPosBytes);
+      _hasPrintedOnce = true;
       _showSuccessToast("تمت الطباعة بنجاح");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم الانتهاء من الطباعة بنجاح', style: TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
     } on PrinterException catch (e) {
       _showErrorToast(e.message);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في الطباعة: ${e.message}', style: const TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } catch (e) {
       log('Error printing: $e');
       _showErrorToast('فشل الطباعة: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل الطباعة: $e', style: const TextStyle(fontWeight: FontWeight.bold)),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -359,6 +419,7 @@ class _PrinterState extends State<Printer> with TickerProviderStateMixin {
             isConnected: isConnected,
             onPrintPressed: _captureAndPrint,
             onRetry: () => setState(() {}),
+            hasPrintedOnce: _hasPrintedOnce,
           ),
           BluetoothTab(
             bluetoothState: _bluetoothState,
